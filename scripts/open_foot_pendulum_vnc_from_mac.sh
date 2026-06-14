@@ -6,6 +6,7 @@ REMOTE="${REMOTE:-deploy-model-devbox}"
 REMOTE_DIR="${REMOTE_DIR:-/teamspace/studios/this_studio/pendulum}"
 LOCAL_PORT="${LOCAL_PORT:-5901}"
 REMOTE_PORT="${REMOTE_PORT:-5901}"
+POLICY_PATH="${POLICY_PATH:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REMOTE_SCRIPT="${REMOTE_DIR}/scripts/view_foot_pendulum_vnc.sh"
 CONTROL_SOCKET="${CONTROL_SOCKET:-${TMPDIR:-/tmp}/foot_pendulum_vnc_${LOCAL_PORT}.sock}"
@@ -26,11 +27,17 @@ stop_tunnel() {
     ssh -S "$CONTROL_SOCKET" -O exit "$REMOTE" >/dev/null 2>&1 || true
     rm -f "$CONTROL_SOCKET"
 }
+remote_policy_env() {
+    if [ -n "$POLICY_PATH" ]; then
+        printf 'POLICY_PATH=%q ' "$POLICY_PATH"
+    fi
+}
+
 
 case "$MODE" in
     open)
         sync_remote_script
-        ssh -o BatchMode=yes "$REMOTE" "bash -lc 'cd ${REMOTE_DIR} && VNC_PORT=${REMOTE_PORT} ${REMOTE_SCRIPT} launch'"
+        ssh -o BatchMode=yes "$REMOTE" "bash -lc 'cd ${REMOTE_DIR} && VNC_PORT=${REMOTE_PORT} $(remote_policy_env)${REMOTE_SCRIPT} launch'"
         start_tunnel
         open "vnc://localhost:${LOCAL_PORT}"
         printf 'Viewer URL: vnc://localhost:%s\n' "$LOCAL_PORT"
