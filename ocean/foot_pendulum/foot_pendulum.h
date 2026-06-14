@@ -629,7 +629,9 @@ void c_render(FootPendulum* env) {
         if (frame_limit == 0 || frame_idx < frame_limit) {
             char frame_path[4096];
             snprintf(frame_path, sizeof(frame_path), "%s/frame_%06d.png", frame_dir, frame_idx);
-            TakeScreenshot(frame_path);
+            Image frame = LoadImageFromScreen();
+            ExportImage(frame, frame_path);
+            UnloadImage(frame);
             frame_idx += 1;
         }
     }
