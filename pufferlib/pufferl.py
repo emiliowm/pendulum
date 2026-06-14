@@ -15,6 +15,8 @@ import configparser
 from collections import defaultdict
 import multiprocessing as mp
 from copy import deepcopy
+import shutil
+import subprocess
 
 import numpy as np
 
@@ -465,11 +467,66 @@ def sweep(env_name, args=None, pareto=False):
         train(env_name, exp_args, range(gpu_id, gpu_id + exp_gpus),
             sweep_obj=sweep_obj, result_queue=result_queue)
 
+def _encode_saved_frames(frame_dir, output_path, fps):
+    frames = sorted(glob.glob(os.path.join(frame_dir, 'frame_*.png')))
+    if not frames:
+        print(f'No frames saved in {frame_dir}')
+        return
+
+    if not output_path:
+        print(f'Saved {len(frames)} PNG frames in {frame_dir}')
+        return
+
+    ffmpeg = shutil.which('ffmpeg')
+    if ffmpeg is None:
+        print(f'ffmpeg not found; saved {len(frames)} PNG frames in {frame_dir}')
+        return
+
+    pattern = os.path.join(frame_dir, 'frame_%06d.png')
+    output_ext = os.path.splitext(output_path)[1].lower()
+    if output_ext == '.mp4':
+        cmd = [
+            ffmpeg, '-y',
+            '-framerate', str(fps),
+            '-i', pattern,
+            '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+            '-pix_fmt', 'yuv420p',
+            output_path,
+        ]
+    else:
+        cmd = [
+            ffmpeg, '-y',
+            '-framerate', str(fps),
+            '-i', pattern,
+            '-vf', 'split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
+            output_path,
+        ]
+    subprocess.run(cmd, check=True)
+    print(f'Saved {len(frames)} frames to {output_path}')
+
 def eval(env_name, args=None, load_path=None):
     '''Evaluate a trained policy. Supports both native and --slowly torch backends.'''
     args = args or load_config(env_name)
     args['reset_state'] = False
     args['train']['horizon'] = 1
+
+    save_frames = int(args.get('save_frames') or 0)
+    trace_path = args.get('trace_path') or ''
+    frame_dir = args.get('frame_dir') or ''
+    if save_frames > 0:
+        if not frame_dir:
+            base = os.path.splitext(args.get('gif_path') or 'eval.gif')[0]
+            frame_dir = f'{base}_frames'
+        os.makedirs(frame_dir, exist_ok=True)
+        for path in glob.glob(os.path.join(frame_dir, 'frame_*.png')):
+            os.remove(path)
+        os.environ['FOOT_PENDULUM_FRAME_DIR'] = frame_dir
+        os.environ['FOOT_PENDULUM_FRAME_LIMIT'] = str(save_frames)
+    if trace_path:
+        trace_parent = os.path.dirname(trace_path)
+        if trace_parent:
+            os.makedirs(trace_parent, exist_ok=True)
+        os.environ['FOOT_PENDULUM_TRACE_PATH'] = trace_path
 
     backend = _resolve_backend(args)
     pufferl = backend.create_pufferl(args)
@@ -488,11 +545,19 @@ def eval(env_name, args=None, load_path=None):
         backend.load_weights(pufferl, load_path)
         print(f'Loaded weights from {load_path}')
 
-    while True:
-        backend.render(pufferl, 0)
-        backend.rollouts(pufferl)
+    try:
+        if save_frames > 0:
+            for _ in range(save_frames):
+                backend.render(pufferl, 0)
+                backend.rollouts(pufferl)
+            _encode_saved_frames(frame_dir, args.get('gif_path'), args.get('fps', 15))
+            return
 
-    backend.close(pufferl)
+        while True:
+            backend.render(pufferl, 0)
+            backend.rollouts(pufferl)
+    finally:
+        backend.close(pufferl)
 
 def match(env_name, policy_a_path, policy_b_path, num_games=4096, args=None, verbose=True):
     '''Head-to-head match between two trained policies in a 2-agent selfplay env.
@@ -604,6 +669,8 @@ def load_config(env_name):
     parser.add_argument('--tag', type=str, default=None, help='Tag for experiment')
     parser.add_argument('--slowly', action='store_true', help='Use PyTorch training backend')
     parser.add_argument('--save-frames', type=int, default=0)
+    parser.add_argument('--frame-dir', type=str, default='')
+    parser.add_argument('--trace-path', type=str, default='')
     parser.add_argument('--gif-path', type=str, default='eval.gif')
     parser.add_argument('--fps', type=float, default=15)
     parser.description = f':blowfish: PufferLib [bright_cyan]{pufferlib.__version__}[/]' \

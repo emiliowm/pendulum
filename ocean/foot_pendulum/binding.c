@@ -18,6 +18,8 @@ static int fp_read_int(Dict* kwargs, const char* key) {
 
 void my_init(Env* env, Dict* kwargs) {
     env->num_agents = 1;
+    env->env_id = (int)env->rng;
+    env->episode_idx = 0;
     env->dt = fp_read_float(kwargs, "dt");
     env->pendulum_length = fp_read_float(kwargs, "pendulum_length");
     env->gravity = fp_read_float(kwargs, "gravity");

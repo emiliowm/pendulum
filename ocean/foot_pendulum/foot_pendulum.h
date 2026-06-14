@@ -19,6 +19,7 @@
 #define FP_RESET_NEAR_UPRIGHT 1
 #define FP_RESET_RANDOM 2
 
+#define FP_SUCCESS_HOLD_REWARD_SCALE 0.02f
 typedef struct Log {
     float perf;
     float score;
@@ -53,6 +54,8 @@ typedef struct FootPendulum {
     float* rewards;
     float* terminals;
     int num_agents;
+    int env_id;
+    int episode_idx;
     unsigned int rng;
 
     float plate_x;
@@ -70,7 +73,6 @@ typedef struct FootPendulum {
     int success_steps_current;
     int success_steps_max;
     float episode_return;
-
     float reward_tip_height;
     float reward_upright;
     float reward_stillness;
@@ -173,13 +175,106 @@ static inline const char* fp_reset_mode_name(int reset_mode) {
     if (reset_mode == FP_RESET_NEAR_UPRIGHT) return "near-upright";
     return "random";
 }
+static inline float fp_plate_speed(FootPendulum* env) {
+    return sqrtf(env->plate_vx * env->plate_vx + env->plate_vz * env->plate_vz);
+}
+
+static inline float fp_tip_height_norm(FootPendulum* env, float phi) {
+    (void)env;
+    return fp_clampf(0.5f * (cosf(phi) + 1.0f), 0.0f, 1.0f);
+}
+
+static inline float fp_smooth_gate(float value, float limit) {
+    float margin = fmaxf(limit * 0.20f, 0.0001f);
+    float excess = fmaxf(fabsf(value) - (limit - margin), 0.0f);
+    float scaled = excess / margin;
+    return scaled * scaled;
+}
+
+static inline float fp_pre_bounds_penalty(FootPendulum* env) {
+    float penalty = 0.0f;
+    penalty += fp_smooth_gate(env->plate_x, env->x_limit);
+    penalty += fp_smooth_gate(env->plate_pitch, env->pitch_limit);
+
+    float z_margin = fmaxf((env->z_max - env->z_min) * 0.20f, 0.0001f);
+    float z_low = fmaxf(env->z_min + z_margin - env->plate_z, 0.0f) / z_margin;
+    float z_high = fmaxf(env->plate_z - (env->z_max - z_margin), 0.0f) / z_margin;
+    penalty += z_low * z_low + z_high * z_high;
+    return penalty;
+}
+
+static inline const char* fp_terminal_reason(bool timeout, bool nan_termination, bool bounds_termination) {
+    if (nan_termination) return "nan";
+    if (bounds_termination) return "bounds";
+    if (timeout) return "timeout";
+    return "none";
+}
+
+static inline FILE* fp_trace_file(void) {
+    static FILE* file = NULL;
+    static bool checked = false;
+    if (checked) return file;
+    checked = true;
+
+    const char* path = getenv("FOOT_PENDULUM_TRACE_PATH");
+    if (path == NULL || path[0] == '\0') return NULL;
+
+    file = fopen(path, "w");
+    if (file == NULL) return NULL;
+    fprintf(file,
+        "episode,step,reset_mode,terminal_reason,action_x,action_z,action_pitch,"
+        "plate_x,plate_z,plate_pitch,plate_vx,plate_vz,plate_pitch_dot,"
+        "pendulum_theta,pendulum_theta_dot,phi,phi_dot,tip_height_norm,"
+        "reward,reward_tip_height,reward_upright,reward_stillness,reward_catch_bonus,"
+        "reward_plate_smoothness,reward_action_penalty,reward_action_rate_penalty,"
+        "reward_bounds_penalty,success_duration,max_success_duration,kick_peak_plate_speed\n");
+    return file;
+}
+
+static inline void fp_trace_step(FootPendulum* env, float action[FP_NUM_ACTIONS],
+        bool timeout, bool nan_termination, bool bounds_termination) {
+    if (env->env_id != 0) return;
+    FILE* file = fp_trace_file();
+    if (file == NULL) return;
+
+    float phi = fp_world_angle(env);
+    float phi_dot = fp_world_angular_velocity(env);
+    fprintf(file,
+        "%d,%d,%s,%s,%.9g,%.9g,%.9g,"
+        "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
+        "%.9g,%.9g,%.9g,%.9g,%.9g,"
+        "%.9g,%.9g,%.9g,%.9g,%.9g,"
+        "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\n",
+        env->episode_idx,
+        env->tick,
+        fp_reset_mode_name(env->reset_mode),
+        fp_terminal_reason(timeout, nan_termination, bounds_termination),
+        action[0], action[1], action[2],
+        env->plate_x, env->plate_z, env->plate_pitch,
+        env->plate_vx, env->plate_vz, env->plate_pitch_dot,
+        env->pendulum_theta, env->pendulum_theta_dot,
+        phi, phi_dot, fp_tip_height_norm(env, phi),
+        env->reward_current,
+        env->reward_tip_height,
+        env->reward_upright,
+        env->reward_stillness,
+        env->reward_catch_bonus,
+        env->reward_plate_smoothness,
+        env->reward_action_penalty,
+        env->reward_action_rate_penalty,
+        env->reward_bounds_penalty,
+        env->success_steps_current * env->dt,
+        env->success_steps_max * env->dt,
+        env->kick_peak_plate_speed);
+    if (timeout || nan_termination || bounds_termination) fflush(file);
+}
 
 void compute_observations(FootPendulum* env) {
     float phi = fp_world_angle(env);
     float phi_dot = fp_world_angular_velocity(env);
     float z_span = env->z_max - env->z_min;
     float z_norm = z_span != 0.0f ? (env->plate_z - env->z_min) / z_span : 0.0f;
-    float tip_height_norm = fp_clampf(0.5f * (cosf(phi) + 1.0f), 0.0f, 1.0f);
+    float tip_height_norm = fp_tip_height_norm(env, phi);
     float time_remaining = 0.0f;
     if (env->horizon_steps > 0) {
         time_remaining = (float)(env->horizon_steps - env->tick) / (float)env->horizon_steps;
@@ -196,7 +291,7 @@ void compute_observations(FootPendulum* env) {
     env->observations[8] = cosf(phi);
     env->observations[9] = phi_dot / env->max_theta_dot;
     env->observations[10] = tip_height_norm;
-    env->observations[11] = sinf(phi);
+    env->observations[11] = env->pendulum_theta_dot / env->max_theta_dot;
     env->observations[12] = env->previous_action[0];
     env->observations[13] = env->previous_action[1];
     env->observations[14] = env->previous_action[2];
@@ -231,8 +326,7 @@ static inline float fp_average(float sum, int count) {
 }
 
 static inline float fp_reward_tip_height(FootPendulum* env, float phi) {
-    (void)env;
-    return fp_clampf(0.5f * (cosf(phi) + 1.0f), 0.0f, 1.0f);
+    return fp_tip_height_norm(env, phi);
 }
 
 static inline float fp_reward_stillness(FootPendulum* env, float phi_dot) {
@@ -240,10 +334,14 @@ static inline float fp_reward_stillness(FootPendulum* env, float phi_dot) {
     return expf(-(phi_dot * phi_dot) / (sigma * sigma));
 }
 
-static inline float fp_reward_catch_bonus(float upright_clipped, float stillness) {
-    float catch_gate = 1.0f / (1.0f + expf(-10.0f * (upright_clipped - 0.90f)));
+static inline float fp_reward_catch_bonus(FootPendulum* env, float upright_clipped, float stillness) {
+    float catch_gate = 1.0f / (1.0f + expf(-14.0f * (upright_clipped - 0.93f)));
+    float speed = fp_plate_speed(env);
+    float plate_calm = expf(-(speed * speed) / 0.25f);
+    float pitch_calm = expf(-(env->plate_pitch_dot * env->plate_pitch_dot) / 0.25f);
     float upright_sq = upright_clipped * upright_clipped;
-    return catch_gate * upright_sq * upright_sq * stillness;
+    float hold_bonus = 1.0f + FP_SUCCESS_HOLD_REWARD_SCALE * (float)env->success_steps_current;
+    return catch_gate * upright_sq * upright_sq * stillness * stillness * plate_calm * pitch_calm * hold_bonus;
 }
 
 static inline float fp_reward_action_penalty(FootPendulum* env, float action[FP_NUM_ACTIONS]) {
@@ -286,13 +384,13 @@ void compute_reward(FootPendulum* env, float action[FP_NUM_ACTIONS], bool bounds
     float upright = cosf(phi);
     float upright_clipped = fp_clampf((upright + 1.0f) * 0.5f, 0.0f, 1.0f);
     env->reward_tip_height = fp_reward_tip_height(env, phi);
-    env->reward_upright = upright_clipped;
     env->reward_stillness = fp_reward_stillness(env, phi_dot);
-    env->reward_catch_bonus = fp_reward_catch_bonus(upright_clipped, env->reward_stillness);
+    env->reward_upright = upright_clipped * (0.10f + 0.90f * env->reward_stillness);
+    env->reward_catch_bonus = fp_reward_catch_bonus(env, upright_clipped, env->reward_stillness);
     env->reward_action_penalty = fp_reward_action_penalty(env, action);
     env->reward_action_rate_penalty = fp_reward_action_rate_penalty(env, action);
     env->reward_plate_smoothness = fp_reward_plate_smoothness(env);
-    env->reward_bounds_penalty = bounds_violation ? 1.0f : 0.0f;
+    env->reward_bounds_penalty = bounds_violation ? 5.0f : fp_pre_bounds_penalty(env);
     env->reward_current = env->height_reward_weight * env->reward_tip_height
         + env->upright_reward_weight * env->reward_upright
         + env->catch_bonus_weight * env->reward_catch_bonus
@@ -367,6 +465,7 @@ void c_reset(FootPendulum* env) {
     env->plate_vx = fp_randf(env, -0.02f, 0.02f);
     env->plate_vz = fp_randf(env, -0.02f, 0.02f);
     env->plate_pitch_dot = fp_randf(env, -0.02f, 0.02f);
+    env->episode_idx += 1;
 
     int span = env->max_horizon_steps - env->min_horizon_steps + 1;
     if (span < 1) span = 1;
@@ -444,7 +543,7 @@ void c_step(FootPendulum* env) {
     bool timeout = env->tick >= env->horizon_steps;
     bool done = timeout || bounds_termination;
 
-    float plate_speed = sqrtf(env->plate_vx * env->plate_vx + env->plate_vz * env->plate_vz);
+    float plate_speed = fp_plate_speed(env);
     if (plate_speed > env->kick_peak_plate_speed) env->kick_peak_plate_speed = plate_speed;
 
     compute_reward(env, action, bounds_termination);
@@ -452,7 +551,8 @@ void c_step(FootPendulum* env) {
     fp_accumulate_reward_components(env);
     env->rewards[0] = env->reward_current;
     env->episode_return += env->reward_current;
-    env->terminals[0] = bounds_termination ? 1.0f : 0.0f;
+    env->terminals[0] = done ? 1.0f : 0.0f;
+    fp_trace_step(env, action, timeout, nan_termination, bounds_termination);
 
     env->previous_action[0] = action[0];
     env->previous_action[1] = action[1];
@@ -518,6 +618,21 @@ void c_render(FootPendulum* env) {
         20, 132, 20, FP_WHITE);
     DrawText("A/D or arrows: x accel   W/S: z accel   Q/E: pitch accel   R: random", 20, FP_HEIGHT - 34, 18, FP_WHITE);
     EndDrawing();
+    const char* frame_dir = getenv("FOOT_PENDULUM_FRAME_DIR");
+    if (frame_dir != NULL && frame_dir[0] != '\0') {
+        static int frame_idx = 0;
+        static int frame_limit = -1;
+        if (frame_limit < 0) {
+            const char* limit_env = getenv("FOOT_PENDULUM_FRAME_LIMIT");
+            frame_limit = (limit_env != NULL && limit_env[0] != '\0') ? atoi(limit_env) : 0;
+        }
+        if (frame_limit == 0 || frame_idx < frame_limit) {
+            char frame_path[4096];
+            snprintf(frame_path, sizeof(frame_path), "%s/frame_%06d.png", frame_dir, frame_idx);
+            TakeScreenshot(frame_path);
+            frame_idx += 1;
+        }
+    }
 }
 
 void c_close(FootPendulum* env) {
