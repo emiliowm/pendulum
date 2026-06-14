@@ -25,20 +25,26 @@
 
 ## Required GPU environment
 
-Milestone completion requires a Linux NVIDIA Docker host. The target profile remains:
+Milestone training is now staged on a Lightning AI Studio:
 
-- Provider/OS image: Linux NVIDIA Docker host, not yet provisioned in this workspace.
-- GPU model: RTX 4090/5090/L40S class; no A100/H100 required for milestones 0-1.
-- NVIDIA driver version: pending GPU host.
-- Docker version: pending GPU host.
-- Rendering: local display or `ssh -X` from the GPU host.
+- Studio: `deploy-model-devbox` in teamspace `emiliomunguia04/deploy-model-project`.
+- OS/image: Ubuntu Linux on AWS, x86_64.
+- GPU model: NVIDIA Tesla T4, 15360 MiB VRAM.
+- NVIDIA driver version: `580.159.03`.
+- CUDA compiler: `/usr/local/cuda/bin/nvcc`, CUDA `13.0`.
+- Docker: installed; `docker info` passes.
+- Docker GPU runtime: `docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi` passes.
+- Python environment: `/teamspace/studios/this_studio/venvs/foot_pendulum`.
+- Project checkout: `/teamspace/studios/this_studio/pendulum`.
+- Rendering: remote `ssh -X` rendering has not been configured.
 
 ## External service status
 
-- GitHub repository target: `humanoid-foot-pendulum`.
-- GitHub creation attempt failed because neither the MCP GitHub tool nor `gh` is authenticated in this session; this checkout still points `origin` at upstream `https://github.com/PufferAI/PufferLib`.
+- GitHub repository remote: `git@github.com:emiliowm/pendulum.git`.
+- GitHub branch: `m0-m1-foot-pendulum` pushed.
 - W&B project target: `raised-foot-pendulum`.
-- W&B authentication is configured in `/Users/emiliowagnermunguia/.netrc` for user `emiliomunguia`; project/dashboard creation still needs an online training run with metrics.
+- W&B authentication is configured locally and on the Lightning Studio for user `emiliomunguia`.
+- W&B preflight project URL: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum`.
 
 ## PufferTank verification commands
 
@@ -69,4 +75,4 @@ PY
 bash build.sh breakout
 ```
 
-Milestone 0 remains blocked until `torch_cuda_available=True` and `bash build.sh breakout` exits successfully on the GPU host.
+Milestone 0 PufferTank shell validation remains pending, but the Lightning host now satisfies the required CUDA and Docker GPU prerequisites.

@@ -76,7 +76,9 @@ Artifacts:
 
 ## Run links and panel notes
 
-- `m0_breakout_smoke`: pending GPU/W&B run; Docker daemon and W&B auth now work locally, but no NVIDIA GPU runtime is available.
-- `m1_smoke`: pending GPU/W&B run on a Linux NVIDIA Docker host.
+- Project: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum`.
+- `studio_preflight`: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum/runs/pjaha87k`; verified W&B logging from the Lightning Studio.
+- `studio_gpu_preflight`: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum/runs/qlpmd5n3`; verified CUDA backend build, PPO metrics, and custom `env/*` metrics at 8,192 steps on Tesla T4.
+- `m0_breakout_smoke`: pending PufferTank/Breakout run if strict infrastructure parity is required.
 - Local CPU metric smoke: non-W&B `pufferlib.pufferl train foot_pendulum --slowly` run populated all custom metric groups in the terminal dashboard at ~65K SPS with 16 agents, horizon 64, total timesteps 8192.
-- Dashboard screenshots: pending W&B dashboard creation after online GPU runs emit the metrics.
+- Dashboard screenshots: pending manual W&B panel layout/screenshot capture.
