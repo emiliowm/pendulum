@@ -44,7 +44,7 @@ Milestone training is now staged on a Lightning AI Studio:
 - GitHub branch: `m0-m1-foot-pendulum` pushed.
 - W&B project target: `raised-foot-pendulum`.
 - W&B authentication is configured locally and on the Lightning Studio for user `emiliomunguia`.
-- W&B preflight project URL: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum`.
+- W&B project URL: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum`.
 
 ## PufferTank verification commands
 
@@ -75,4 +75,4 @@ PY
 bash build.sh breakout
 ```
 
-Milestone 0 PufferTank shell validation remains pending, but the Lightning host now satisfies the required CUDA and Docker GPU prerequisites.
+Milestone 0 PufferTank shell validation passed on the Lightning T4 host. `./docker.sh test` entered the `pufferai/puffertank:4.0` container, `/puffertank/pufferlib` was the working directory, `nvidia-smi` reported `Tesla T4`, and `torch.cuda.is_available()` returned `True` with one CUDA device.
