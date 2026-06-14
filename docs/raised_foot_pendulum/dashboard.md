@@ -80,6 +80,7 @@ Artifacts:
 - `studio_preflight`: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum/runs/pjaha87k`; verified W&B logging from the Lightning Studio.
 - `studio_gpu_preflight`: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum/runs/qlpmd5n3`; verified CUDA backend build, PPO metrics, and custom `env/*` metrics at 8,192 steps on Tesla T4.
 - `m0_breakout_1m_confirm`: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum/runs/crhsl1lu`; verified PufferTank CUDA build and Breakout smoke at 1,048,576 agent steps, ~1.39M SPS.
+- `m1_train`: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum/runs/p9pnocwa`; completed 99,876,864 agent steps at ~1.23M SPS. It did not meet the 3s success target: final `max_success_duration=0.019`, `hanging_success_duration=0.00027`, `bounds_termination=0.99894`.
 - W&B report: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum/reports/Raised-Foot-Pendulum-Milestone-0-Dashboard--VmlldzoxNzIyMDgzNA==?accessToken=zgzq2u8gopxhbm0d9lsx218czvqqtklmx54i9jzh60y88xm39ubtj20yt8yq2c5p`; share link enabled for unauthenticated viewing.
 - Dashboard screenshot: `docs/raised_foot_pendulum/wandb_m0_dashboard_final.png`.
 - Local CPU metric smoke: non-W&B `pufferlib.pufferl train foot_pendulum --slowly` run populated all custom metric groups in the terminal dashboard at ~65K SPS with 16 agents, horizon 64, total timesteps 8192.
