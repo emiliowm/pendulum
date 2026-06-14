@@ -5,6 +5,7 @@ pufferlib/puffernet.c
 logs/
 
 # Build dir
+/foot_pendulum
 build/
 
 # hipified cuda extensions dir [HIP/ROCM]
