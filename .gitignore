@@ -47,6 +47,7 @@ MANIFEST
 
 # Mac files
 .DS_Store
+*.dSYM/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -156,6 +157,10 @@ dmypy.json
 
 checkpoints/
 experiments/
+runs/*
+!runs/.gitkeep
+videos/*
+!videos/.gitkeep
 wandb/
 .neptune/
 raylib*/
@@ -171,4 +176,3 @@ pufferlib/ocean/impulse_wars/benchmark/
 # Data
 resources/drive/data/*
 resources/drive/binaries/*
-
