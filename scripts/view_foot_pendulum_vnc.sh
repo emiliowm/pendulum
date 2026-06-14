@@ -10,6 +10,8 @@ PROJECT_DIR="${PROJECT_DIR:-/teamspace/studios/this_studio/pendulum}"
 VENV_PATH="${VENV_PATH:-/teamspace/studios/this_studio/venvs/foot_pendulum}"
 POLICY_PATH="${POLICY_PATH:-${PROJECT_DIR}/checkpoints/foot_pendulum/p9pnocwa/0000000099876864.bin}"
 LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/runs/view_foot_pendulum_vnc}"
+VNC_PASSWORD="${VNC_PASSWORD:-pendulum}"
+VNC_AUTH_FILE="${VNC_AUTH_FILE:-${LOG_DIR}/vnc.pass}"
 
 export DISPLAY
 export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
@@ -74,7 +76,9 @@ start_x11vnc() {
     if is_alive "$pidfile"; then
         return
     fi
-    x11vnc -display "$DISPLAY" -localhost -nopw -forever -shared -noxdamage -rfbport "$VNC_PORT" >"$LOG_DIR/x11vnc.log" 2>&1 &
+    x11vnc -storepasswd "$VNC_PASSWORD" "$VNC_AUTH_FILE" >"$LOG_DIR/x11vnc-storepasswd.log" 2>&1
+    chmod 600 "$VNC_AUTH_FILE"
+    x11vnc -display "$DISPLAY" -localhost -rfbauth "$VNC_AUTH_FILE" -forever -shared -noxdamage -rfbport "$VNC_PORT" >"$LOG_DIR/x11vnc.log" 2>&1 &
     echo $! > "$pidfile"
 }
 
@@ -140,6 +144,7 @@ status_one() {
 print_connect_info() {
     printf 'Remote display: %s\n' "$DISPLAY"
     printf 'Remote VNC: 127.0.0.1:%s\n' "$VNC_PORT"
+    printf 'VNC password: %s\n' "$VNC_PASSWORD"
     printf 'Policy: %s\n' "$POLICY_PATH"
     printf 'Logs: %s\n' "$LOG_DIR"
     printf 'From your Mac: ssh -N -L %s:127.0.0.1:%s deploy-model-devbox\n' "$VNC_PORT" "$VNC_PORT"
