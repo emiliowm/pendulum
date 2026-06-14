@@ -5,6 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON_BIN="${PYTHON:-python3}"
 VENV_DIR="${VENV_DIR:-$PROJECT_DIR/.venv}"
 ENV_NAME="${PUFFER_ENV:-foot_pendulum}"
+USE_ACTIVE_ENV="${USE_ACTIVE_ENV:-}"
 
 info() {
   printf '\n==> %s\n' "$*"
@@ -40,9 +41,18 @@ else
   echo "apt-get not found; assuming build dependencies are already present."
 fi
 
-info "Creating Python virtual environment at $VENV_DIR"
-"$PYTHON_BIN" -m venv "$VENV_DIR"
-source "$VENV_DIR/bin/activate"
+if [ -z "$USE_ACTIVE_ENV" ] && [ -d /teamspace/studios/this_studio ]; then
+  USE_ACTIVE_ENV=1
+fi
+
+if [ "$USE_ACTIVE_ENV" = "1" ]; then
+  info "Using active Python environment"
+else
+  info "Creating Python virtual environment at $VENV_DIR"
+  "$PYTHON_BIN" -m venv "$VENV_DIR"
+  source "$VENV_DIR/bin/activate"
+fi
+
 python -m pip install --upgrade pip setuptools wheel
 
 info "Installing project package"
@@ -71,9 +81,14 @@ cat <<EOF
 To start training:
 
   cd "$PROJECT_DIR"
-  source "$VENV_DIR/bin/activate"
+EOF
+
+if [ "$USE_ACTIVE_ENV" != "1" ]; then
+  printf '  source "%s/bin/activate"\n' "$VENV_DIR"
+fi
+
+cat <<EOF
   bash scripts/train_foot_pendulum.sh lightning_gpu
 
 If you use W&B, set WANDB_API_KEY as a Lightning secret or run 'wandb login' in the Studio terminal before training.
 EOF
-
