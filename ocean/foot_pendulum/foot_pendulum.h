@@ -202,6 +202,41 @@ static inline float fp_pre_bounds_penalty(FootPendulum* env) {
     penalty += z_low * z_low + z_high * z_high;
     return penalty;
 }
+static inline bool fp_apply_bounds(FootPendulum* env) {
+    bool touched = false;
+    if (env->plate_x < -env->x_limit) {
+        env->plate_x = -env->x_limit;
+        if (env->plate_vx < 0.0f) env->plate_vx = 0.0f;
+        touched = true;
+    } else if (env->plate_x > env->x_limit) {
+        env->plate_x = env->x_limit;
+        if (env->plate_vx > 0.0f) env->plate_vx = 0.0f;
+        touched = true;
+    }
+
+    if (env->plate_z < env->z_min) {
+        env->plate_z = env->z_min;
+        if (env->plate_vz < 0.0f) env->plate_vz = 0.0f;
+        touched = true;
+    } else if (env->plate_z > env->z_max) {
+        env->plate_z = env->z_max;
+        if (env->plate_vz > 0.0f) env->plate_vz = 0.0f;
+        touched = true;
+    }
+
+    if (env->plate_pitch < -env->pitch_limit) {
+        env->plate_pitch = -env->pitch_limit;
+        if (env->plate_pitch_dot < 0.0f) env->plate_pitch_dot = 0.0f;
+        touched = true;
+    } else if (env->plate_pitch > env->pitch_limit) {
+        env->plate_pitch = env->pitch_limit;
+        if (env->plate_pitch_dot > 0.0f) env->plate_pitch_dot = 0.0f;
+        touched = true;
+    }
+
+    return touched;
+}
+
 
 static inline const char* fp_terminal_reason(bool timeout, bool nan_termination, bool bounds_termination) {
     if (nan_termination) return "nan";
@@ -537,16 +572,17 @@ void c_step(FootPendulum* env) {
         -env->max_theta_dot, env->max_theta_dot);
     env->pendulum_theta = fp_wrap_pi(env->pendulum_theta + env->dt * env->pendulum_theta_dot);
 
+    bool bounds_contact = fp_apply_bounds(env);
     env->tick += 1;
     bool nan_termination = !fp_state_isfinite(env);
-    bool bounds_termination = nan_termination || fp_bounds_violated(env);
+    bool bounds_termination = false;
     bool timeout = env->tick >= env->horizon_steps;
-    bool done = timeout || bounds_termination;
+    bool done = timeout || nan_termination;
 
     float plate_speed = fp_plate_speed(env);
     if (plate_speed > env->kick_peak_plate_speed) env->kick_peak_plate_speed = plate_speed;
 
-    compute_reward(env, action, bounds_termination);
+    compute_reward(env, action, bounds_contact || nan_termination);
     update_success(env);
     fp_accumulate_reward_components(env);
     env->rewards[0] = env->reward_current;
