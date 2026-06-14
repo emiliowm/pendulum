@@ -36,7 +36,7 @@ Milestone training is now staged on a Lightning AI Studio:
 - Docker GPU runtime: `docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi` passes.
 - Python environment: `/teamspace/studios/this_studio/venvs/foot_pendulum`.
 - Project checkout: `/teamspace/studios/this_studio/pendulum`.
-- Rendering: remote `ssh -X` rendering has not been configured.
+- Rendering: VNC-backed remote rendering is configured through `scripts/open_foot_pendulum_vnc_from_mac.sh` and `scripts/view_foot_pendulum_vnc.sh`.
 
 ## External service status
 
@@ -45,6 +45,43 @@ Milestone training is now staged on a Lightning AI Studio:
 - W&B project target: `raised-foot-pendulum`.
 - W&B authentication is configured locally and on the Lightning Studio for user `emiliomunguia`.
 - W&B project URL: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum`.
+
+## Remote visualization and inspection
+
+Open the current Lightning render session from macOS:
+
+```bash
+cd ~/Documents/funstuff/rl/humanoid-foot-pendulum
+scripts/open_foot_pendulum_vnc_from_mac.sh open
+```
+
+Use Screen Sharing password:
+
+```text
+pendulum
+```
+
+Stop the viewer:
+
+```bash
+scripts/open_foot_pendulum_vnc_from_mac.sh stop
+```
+
+Capture an evaluation GIF plus per-step trace on the Lightning host:
+
+```bash
+cd /teamspace/studios/this_studio/pendulum
+source /teamspace/studios/this_studio/venvs/foot_pendulum/bin/activate
+SAVE_FRAMES=300 FPS=30 OUT_DIR=runs/foot_pendulum_inspect/latest \
+  ./scripts/inspect_foot_pendulum.sh /path/to/checkpoint.bin
+```
+
+Run validity checks:
+
+```bash
+bash build.sh foot_pendulum --local
+./foot_pendulum --validity-check
+```
 
 ## PufferTank verification commands
 

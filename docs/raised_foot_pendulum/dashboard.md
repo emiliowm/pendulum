@@ -70,9 +70,9 @@ Custom keys:
 
 Artifacts:
 
-- evaluation GIF/video artifacts from `puffer eval foot_pendulum --save-frames` when enabled
-- screenshots from the raylib standalone renderer
-- notes linking visible upright hold to `success_duration` / `max_success_duration`
+- evaluation GIF/video artifacts from `puffer eval foot_pendulum --save-frames ... --trace-path ...` or `scripts/inspect_foot_pendulum.sh`
+- screenshots from the raylib standalone/VNC renderer
+- trace CSVs linking visible upright hold to `success_duration`, `max_success_duration`, action saturation, and `terminal_reason`
 
 ## Run links and panel notes
 
@@ -84,3 +84,5 @@ Artifacts:
 - W&B report: `https://wandb.ai/emiliomunguia-none/raised-foot-pendulum/reports/Raised-Foot-Pendulum-Milestone-0-Dashboard--VmlldzoxNzIyMDgzNA==?accessToken=zgzq2u8gopxhbm0d9lsx218czvqqtklmx54i9jzh60y88xm39ubtj20yt8yq2c5p`; share link enabled for unauthenticated viewing.
 - Dashboard screenshot: `docs/raised_foot_pendulum/wandb_m0_dashboard_final.png`.
 - Local CPU metric smoke: non-W&B `pufferlib.pufferl train foot_pendulum --slowly` run populated all custom metric groups in the terminal dashboard at ~65K SPS with 16 agents, horizon 64, total timesteps 8192.
+- `m1_fix_*_10m`: first five targeted 10M runs after reward-gate changes; all still had `bounds_termination=1.0`, best `max_success_duration=0.031867`.
+- `m1_clamp_*_10m`: second five targeted 10M runs after clamped soft-wall bounds; `bounds_termination=0.0`, best run `m1_clamp_default_10m` (`uu8by54s`) reached `max_success_duration=0.074482`, still no hanging-start success.
